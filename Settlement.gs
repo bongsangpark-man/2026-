@@ -44,7 +44,10 @@ function getSettlementCalcData(hosu, exitDateStr, newInfo) {
 
   // 3. 계산 로직 수행
   const rentCalc = calculateRentLogic(rInfo, rentRow, exitDate);
-  const maintCalc = calculateMaintLogic(maintRow, exitDate);
+
+  // 4. 관리비 일할 계산용 순수 관리비 조회 (관리비_세부내역 파일)
+  const pureMaintFee = getPureMaintFee_(hosu);
+  const maintCalc = calculateMaintLogic(maintRow, exitDate, pureMaintFee);
 
   return {
     hosu: hosu,
@@ -204,9 +207,11 @@ function calculateRentLogic(rInfo, rowData, exitDate) {
 }
 
 // ----------------------------------------------------
-// [로직 2] 관리비 계산 (유지)
+// [로직 2] 관리비 계산 (수정: 순수 관리비로 일할 계산)
+// pureMaintFee: 관리비_세부내역에서 가져온 순수 관리비 (합계-미납액-미납연체료)
+// null이면 기존 방식(납부내역 금액)으로 폴백
 // ----------------------------------------------------
-function calculateMaintLogic(rowData, exitDate) {
+function calculateMaintLogic(rowData, exitDate, pureMaintFee) {
   if (!rowData || rowData.length === 0) return { amount: 0, period: "" };
   
   let targetMonthIndex = 0;
@@ -234,12 +239,14 @@ function calculateMaintLogic(rowData, exitDate) {
     startDate.setFullYear(exitDate.getFullYear());
     startDate.setMonth(targetMonthIndex); 
     startDate.setDate(1);
-    totalDeduct += targetAmount;
+    totalDeduct += targetAmount;  // 미납 금액은 기존 납부내역 금액 그대로
   }
   
+  // 일할 계산: 순수 관리비 사용 (없으면 납부내역 금액으로 폴백)
+  const feeForProRata = (pureMaintFee != null && pureMaintFee > 0) ? pureMaintFee : targetAmount;
   const daysInExitMonth = new Date(exitDate.getFullYear(), exitDate.getMonth() + 1, 0).getDate();
   const daysUsed = exitDate.getDate();
-  const proRated = Math.floor(targetAmount * (daysUsed / daysInExitMonth));
+  const proRated = Math.floor(feeForProRata * (daysUsed / daysInExitMonth));
   totalDeduct += proRated;
   totalDeduct = Math.floor(totalDeduct / 10) * 10; // 10원 단위 절사
 
@@ -414,4 +421,66 @@ function getSmartEndDate(startDate, anchorDay) {
   nextCycleStart.setDate(nextCycleStart.getDate() - 1);
   
   return nextCycleStart;
+}
+
+// ----------------------------------------------------
+// [헬퍼] 관리비_세부내역에서 순수 관리비 조회
+// 순수 관리비 = 합계 - 미납액 - 미납연체료
+// 최근 월 시트 기준 (당월 → 전월 순으로 탐색)
+// ----------------------------------------------------
+function getPureMaintFee_(hosu) {
+  let tempFileId = null;
+  try {
+    const result = openExcelAsSheet_(MGMT_DATA_ID, 'temp_정산_세부내역');
+    tempFileId = result.tempFileId;
+    const mgmtSS = result.spreadsheet;
+
+    // 당월 → 전월 순으로 시트 탐색
+    const now = new Date();
+    const currYear = now.getFullYear();
+    const currMonth = now.getMonth() + 1;
+
+    let sheet = mgmtSS.getSheetByName(makeNoticeSheetName_(currYear, currMonth));
+    if (!sheet) {
+      const prev = getPrevYearMonth_(currYear, currMonth);
+      sheet = mgmtSS.getSheetByName(makeNoticeSheetName_(prev.year, prev.month));
+    }
+
+    if (!sheet) {
+      console.log('관리비_세부내역에서 최근 월 시트를 찾을 수 없습니다.');
+      return null;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[1];  // 2행 = 헤더
+    const colMap = buildColumnMap_(headers);
+
+    const hosuIdx = colMap['호수'];
+    const totalIdx = colMap['합계'];
+    if (hosuIdx === undefined || totalIdx === undefined) return null;
+
+    for (let i = 2; i < data.length; i++) {
+      if (String(data[i][hosuIdx] || '').trim() === String(hosu).trim()) {
+        const total   = Number(data[i][totalIdx] || 0) || 0;
+        const unpaid  = colMap['미납액'] !== undefined
+                        ? (Number(data[i][colMap['미납액']] || 0) || 0) : 0;
+        const lateFee = colMap['미납연체료'] !== undefined
+                        ? (Number(data[i][colMap['미납연체료']] || 0) || 0) : 0;
+        const pureFee = total - unpaid - lateFee;
+        console.log(`[호수 ${hosu}] 순수 관리비: ${pureFee} (합계 ${total} - 미납액 ${unpaid} - 연체료 ${lateFee})`);
+        return pureFee;
+      }
+    }
+
+    console.log(`[호수 ${hosu}] 관리비_세부내역에서 호수를 찾을 수 없습니다.`);
+    return null;
+
+  } catch (e) {
+    console.log('관리비_세부내역 조회 오류: ' + e.toString());
+    return null;
+  } finally {
+    if (tempFileId) {
+      try { DriveApp.getFileById(tempFileId).setTrashed(true); } catch (e) {}
+    }
+  }
 }

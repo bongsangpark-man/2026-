@@ -92,6 +92,15 @@ function updateRentalInfo(formObject) {
     newValues[11] = formObject.tenant;
   }
 
+  // ★ [수정] 상호명이 입력된 경우, 계약자 이름(L열)에 '(상호명)' 형태로 반영
+  // 변경(Change) 탭과 동일한 방식: "홍길동(상호명)"
+  if ('bizName' in formObject && formObject.bizName) {
+    let currentTenant = String(newValues[11] || '');
+    // 기존 괄호 부분 제거 후 새로 붙이기
+    currentTenant = currentTenant.replace(/\(.*\)$/, '').trim();
+    newValues[11] = currentTenant + '(' + formObject.bizName + ')';
+  }
+
   // 3. 나머지 항목 매핑
   if('deposit1' in formObject && formObject.deposit1) newValues[5] = formObject.deposit1; // F열
   if('deposit2' in formObject && formObject.deposit2) newValues[5] = formObject.deposit2; // F열
@@ -114,6 +123,46 @@ function updateRentalInfo(formObject) {
   
   // 데이터 시트에 반영
   rowRange.setValues([newValues]);
+
+  // ★ [추가] 임대료 변경 시, 기존 납부 금액 셀 글씨색을 빨간색으로 변경
+  // → 월별 납부현황 대시보드에서 검정 글씨만 미납 비교 대상이므로,
+  //   빨간색으로 바꾸면 기존 납부분이 미납으로 잡히지 않음
+  if ('rent' in formObject && formObject.rent) {
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const rentSheet = ss.getSheetByName(UI_SHEET_RENT);
+      const rentRowIdx = findRowIndex(rentSheet, formObject.hosu);
+      
+      if (rentRowIdx > 0) {
+        const lastCol = rentSheet.getLastColumn();
+        // F열(6열)부터 끝까지 읽기 — 금액/날짜 쌍이 2열씩 반복
+        if (lastCol >= 6) {
+          const dataRange = rentSheet.getRange(rentRowIdx, 6, 1, lastCol - 5);
+          const values = dataRange.getValues()[0];
+          const backgrounds = dataRange.getBackgrounds()[0];
+          
+          // 금액 열만 순회 (인덱스 0, 2, 4, ... = F, H, J, ...)
+          for (let c = 0; c < values.length; c += 2) {
+            const cellValue = values[c];
+            const cellBg = backgrounds[c];
+            
+            // 배경이 검정(공실/입주전)이면 건너뜀
+            if (cellBg === '#000000' || cellBg === 'black') continue;
+            
+            // 금액이 입력되어 있으면 (기존 납부분) → 글씨색 빨간색으로 변경
+            if (cellValue !== '' && cellValue != null && cellValue !== 0) {
+              rentSheet.getRange(rentRowIdx, 6 + c).setFontColor('#1a73e8');
+            }
+          }
+        }
+        
+        // E열(기준 월세)도 새 금액으로 업데이트
+        rentSheet.getRange(rentRowIdx, 5).setValue(formObject.rent);
+      }
+    } catch (e) {
+      console.error("납부내역 글씨색 변경 중 오류: " + e.toString());
+    }
+  }
 
   // [동기화] 계약 만기 일정 업데이트
   try {

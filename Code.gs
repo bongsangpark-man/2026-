@@ -25,6 +25,10 @@ function onOpen() {
   ui.createMenu('📊 부가세 신고자료')
     .addItem('부가세 메뉴 열기', 'showVatSidebar') 
     .addToUi();
+
+  ui.createMenu('📄 관리비 고지서')
+    .addItem('📋 관리비 고지서 생성', 'generateMgmtNotice')
+    .addToUi();
 }
 
 // ==========================================
@@ -105,6 +109,9 @@ function processRentCarryOver(currentSS, newSS, currentYear) {
   const headers = oldSheet.getRange(1, 1, 1, oldSheet.getLastColumn()).getValues()[0];
   const targetMonths = [];
 
+  // D열(인덱스 3)에서 임대유형 읽기 → 전세 호수 식별
+  const typeData = oldSheet.getRange(2, 4, lastRow - 1, 1).getValues();
+
   headers.forEach((h, i) => {
     const headStr = h.toString().trim();
     if (i+1 >= 6 && headStr.includes('월') && !headStr.includes('.')) {
@@ -129,13 +136,32 @@ function processRentCarryOver(currentSS, newSS, currentYear) {
     const oldData = oldSheet.getRange(2, obj.index, lastRow - 1, 2).getValues();
     const newBgs = [];
 
-    oldData.forEach(row => {
+    oldData.forEach((row, idx) => {
       const date = row[1] ? row[1].toString().trim() : "";
-      const color = (date !== "") ? "#d9d9d9" : null;
+      const isJeonse = (typeData[idx][0].toString().trim() === "전세");
+      const color = (isJeonse || date !== "") ? "#d9d9d9" : null;
       newBgs.push([color, color]); // 금액열과 날짜열 세트로 색칠
     });
 
     newSheet.getRange(2, 6, newBgs.length, 2).setBackgrounds(newBgs);
+  });
+
+  // 전세 호수: 새 해의 모든 월(1월~12월) 셀도 회색 색칠
+  const newHeaders = newSheet.getRange(1, 1, 1, newSheet.getLastColumn()).getValues()[0];
+  const newLastRow = newSheet.getLastRow();
+  if (newLastRow < 2) return;
+
+  newHeaders.forEach((h, i) => {
+    const headStr = h.toString().trim();
+    // "1월"~"12월" 형태 (이월된 "25.11" 등은 '.'이 포함되므로 제외됨)
+    if (i + 1 >= 6 && headStr.includes('월') && !headStr.includes('.')) {
+      const colBgs = [];
+      for (let r = 0; r < newLastRow - 1; r++) {
+        const isJeonse = (typeData[r][0].toString().trim() === "전세");
+        colBgs.push(isJeonse ? ["#d9d9d9", "#d9d9d9"] : [null, null]);
+      }
+      newSheet.getRange(2, i + 1, colBgs.length, 2).setBackgrounds(colBgs);
+    }
   });
 }
 

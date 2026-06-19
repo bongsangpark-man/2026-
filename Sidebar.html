@@ -203,7 +203,7 @@
 
         <label style="margin-top:10px;">하자보수 및 기타</label>
         <div class="checkbox-group">
-           <label class="checkbox-item"><input type="checkbox" id="chk_clean" onchange="toggleFixCost('clean', 300000)">청소비 (30만)</label>
+           <label class="checkbox-item"><input type="checkbox" id="chk_clean" onchange="toggleFixCost('clean', 400000)">청소비 (40만)</label>
            <label class="checkbox-item"><input type="checkbox" id="chk_filter" onchange="toggleFixCost('filter', 30000)">필터 (3만)</label>
         </div>
         <div id="as_list"></div> <button type="button" class="btn-small" onclick="addAsItem()">+ A/S 항목 추가</button>
@@ -746,19 +746,11 @@
       function initSettlementForm(data) {
         settlementBaseInfo = data; 
         
-        // 보증금
-        setVal("set_deposit", data.info.deposit);
-        
-        // 선불 임대료 반환
+        // ★ [수정] 선불월세를 보증금에 합산 (별도 행 제거)
         var refundVal = data.rent.prepaidRefund || data.rent.prepaid || 0;
-
-        if (refundVal > 0) { 
-           document.getElementById("prepaid_rent_area").classList.remove("hidden");
-           setVal("set_refund_prepaid", refundVal);
-        } else {
-           document.getElementById("prepaid_rent_area").classList.add("hidden");
-           setVal("set_refund_prepaid", 0);
-        }
+        setVal("set_deposit", data.info.deposit + refundVal);
+        document.getElementById("prepaid_rent_area").classList.add("hidden");
+        setVal("set_refund_prepaid", 0);
 
         // 임대료 공제 (기존 세입자 기준)
         setVal("set_rent_deduct", data.rent.amount);
@@ -875,7 +867,7 @@
         }
         
         deduct += getV("set_broker_fee");
-        deduct += (document.getElementById("chk_clean").checked ? 300000 : 0);
+        deduct += (document.getElementById("chk_clean").checked ? 400000 : 0);
         deduct += (document.getElementById("chk_filter").checked ? 30000 : 0);
         deduct += getV("set_retained");
         
@@ -922,7 +914,7 @@
            utils: { elec: getV("util_elec"), gas: getV("util_gas"), water: getV("util_water") },
            brokerFee: getV("set_broker_fee"),
            repair: {
-               clean: document.getElementById("chk_clean").checked ? "300,000" : "",
+               clean: document.getElementById("chk_clean").checked ? "400,000" : "",
                filter: document.getElementById("chk_filter").checked ? "30,000" : "",
                asItems: []
            },

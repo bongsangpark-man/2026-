@@ -93,12 +93,13 @@ function calculateRentLogic(rInfo, rowData, exitDate) {
   if (!anchorDay || anchorDay < 1) anchorDay = 1;
 
   // 2. 마지막 납부 월 확인
+  // ★ [수정] 25.12월 이월 열(F-G, index 5-6) 건너뛰고 1월(H-I, index 7-8)부터 시작
   let lastPaidMonth = 0;   
   let lastPaidAmount = 0;
-  if (rowData && rowData.length > 5) {
-    for (let c = 6; c < rowData.length; c += 2) {
+  if (rowData && rowData.length > 7) {
+    for (let c = 8; c < rowData.length; c += 2) {
       if (rowData[c] && rowData[c] !== "") {
-        lastPaidMonth = (c - 6) / 2 + 1; 
+        lastPaidMonth = (c - 8) / 2 + 1; 
         lastPaidAmount = Number(rowData[c - 1]); 
       }
     }
@@ -217,28 +218,31 @@ function calculateMaintLogic(rowData, exitDate, pureMaintFee) {
   let targetMonthIndex = 0;
   let targetAmount = 0;
   
-  for (let c = 2; c < rowData.length; c += 2) {
+  // ★ [수정] 25.12월 이월 열(C-D, index 2-3) 건너뛰고 1월(E-F, index 4-5)부터 시작
+  for (let c = 4; c < rowData.length; c += 2) {
     if (rowData[c] && rowData[c] !== "") {
-      targetMonthIndex = (c - 2) / 2;
+      targetMonthIndex = (c - 4) / 2;
       targetAmount = Number(rowData[c]);
     }
   }
   
-  const dateCellVal = rowData[targetMonthIndex * 2 + 3];
+  const dateCellVal = rowData[targetMonthIndex * 2 + 5];
   const isPaid = (dateCellVal && dateCellVal !== "");
   
   let startDate = new Date(exitDate); 
   startDate.setHours(0,0,0,0);
   let totalDeduct = 0;
 
+  // ★ [수정] setDate(1)을 먼저 호출하여 setMonth() 날짜 오버플로우 방지
+  // (예: exitDate가 3/31일 때 setMonth(1)하면 2/31→3/3으로 밀리는 버그 수정)
   if (isPaid) {
+    startDate.setDate(1);
     startDate.setFullYear(exitDate.getFullYear());
     startDate.setMonth(targetMonthIndex + 1); 
-    startDate.setDate(1);
   } else {
+    startDate.setDate(1);
     startDate.setFullYear(exitDate.getFullYear());
     startDate.setMonth(targetMonthIndex); 
-    startDate.setDate(1);
     totalDeduct += targetAmount;  // 미납 금액은 기존 납부내역 금액 그대로
   }
   

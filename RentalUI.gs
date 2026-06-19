@@ -323,7 +323,8 @@ function changeRentalStatus(form) {
       blackEndMonthIndex = startDateObj.getMonth() - 1;
     }
     if (blackEndMonthIndex >= 0) {
-      const numColumnsToColor = (blackEndMonthIndex + 1) * 2;
+      // ★ [수정] 25.12월 이월열(C-D) 2칸 포함하여 색칠 범위 확장
+      const numColumnsToColor = (blackEndMonthIndex + 1) * 2 + 2;
       sheetMgmt.getRange(mgmtRowIdx, 3, 1, numColumnsToColor).setBackground("black");
     }
   }
@@ -342,7 +343,8 @@ function changeRentalStatus(form) {
       else if (form.newType === "월세(후불)") blackEndMonthIndex = startMonth;
 
       if (blackEndMonthIndex >= 0) {
-        const numColumnsToColor = (blackEndMonthIndex + 1) * 2;
+        // ★ [수정] 25.12월 이월열(F-G) 2칸 포함하여 색칠 범위 확장
+        const numColumnsToColor = (blackEndMonthIndex + 1) * 2 + 2;
         sheetRent.getRange(rentRowIdx, 6, 1, numColumnsToColor).setBackground("black");
       }
     }
